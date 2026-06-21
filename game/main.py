@@ -2234,10 +2234,16 @@ class CesarMiniGame:
                     self.phase = "done"
                     self.done = True
         else:
-            # Only number keys 1-9 interact; all other keys are ignored completely
-            if ev.unicode in "123456789":
-                self.current_try = int(ev.unicode)
+            # Decrypt mode — uses ev.key (physical key code) to avoid NumLock
+            # ambiguity where Numpad-2 with NumLock ON produces unicode "2".
+            # Navigation keys checked FIRST so they can never be misread as numbers.
+            if ev.key in (pygame.K_UP, pygame.K_KP8):
+                self.current_try = (self.current_try - 2) % 9 + 1
                 self.decrypted_preview = self._try_decrypt(self.current_try)
+            elif ev.key in (pygame.K_DOWN, pygame.K_KP2):
+                self.current_try = self.current_try % 9 + 1
+                self.decrypted_preview = self._try_decrypt(self.current_try)
+            elif ev.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
                 cracked = (self.current_try == self.original_shift)
                 self.result = {
                     "cracked": cracked,
@@ -2245,6 +2251,18 @@ class CesarMiniGame:
                     "decrypted": self._try_decrypt(self.current_try),
                 }
                 self.done = True
+            elif pygame.K_1 <= ev.key <= pygame.K_9:
+                n = ev.key - pygame.K_0
+                self.current_try = n
+                self.decrypted_preview = self._try_decrypt(n)
+                cracked = (n == self.original_shift)
+                self.result = {
+                    "cracked": cracked,
+                    "shift": n,
+                    "decrypted": self._try_decrypt(n),
+                }
+                self.done = True
+            # ALL other keys (ESC, Shift, Alt, Win, numpad with NumLock, etc.) → ignored
 
     def draw(self, surf):
         ov = pygame.Surface((GAME_W, H), pygame.SRCALPHA)
@@ -2300,7 +2318,7 @@ class CesarMiniGame:
                 surf.blit(rt, (bx + 24, ry + 2))
             dec_t = FONT_SM.render(f"Tentativa [{self.current_try}]: {self.decrypted_preview[:32]}", True, CYAN)
             surf.blit(dec_t, (bx + 20, by + 318))
-            hint3 = FONT_XS.render("Pressione o número (1-9) para confirmar sua escolha", True, GRAY)
+            hint3 = FONT_XS.render("↑↓ navegar  |  1-9 selecionar direto  |  ENTER confirmar", True, GRAY)
             surf.blit(hint3, (bx + 20, by + 354))
 
 
@@ -3824,14 +3842,6 @@ class Game:
             for ev in events:
                 if ev.type == pygame.QUIT:
                     running = False
-
-                # Mini-game intercepts all events during gameplay
-                if (self.screen_state == "game"
-                        and self.game_level
-                        and self.game_level.minigame is not None):
-                    self.game_level.minigame.handle_event(ev)
-                    if self.game_level.minigame.done:
-                        self._finish_minigame(self.game_level)
                     continue
 
                 if self.screen_state == "menu":
@@ -3851,7 +3861,15 @@ class Game:
                     if ev.type == pygame.KEYDOWN and ev.key == pygame.K_ESCAPE:
                         self.screen_state = "menu"
                 elif self.screen_state == "game":
-                    self._handle_game_event(ev)
+                    gl = self.game_level
+                    if gl and gl.minigame is not None:
+                        # Minigame active: it gets the event exclusively
+                        gl.minigame.handle_event(ev)
+                        if gl.minigame and gl.minigame.done:
+                            self._finish_minigame(gl)
+                    else:
+                        # No minigame: normal game event handling
+                        self._handle_game_event(ev)
                 elif self.screen_state == "complete":
                     if ev.type == pygame.MOUSEBUTTONDOWN or \
                        (ev.type == pygame.KEYDOWN and ev.key == pygame.K_RETURN):
@@ -3944,6 +3962,9 @@ class Game:
 
     def _handle_game_event(self, ev):
         gl = self.game_level
+        # Safety guard: never process game events when a minigame is active
+        if gl and gl.minigame is not None:
+            return
         if ev.type == pygame.KEYDOWN:
             if ev.key == pygame.K_ESCAPE:
                 self.screen_state = "menu"
