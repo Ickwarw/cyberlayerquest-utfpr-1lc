@@ -2234,19 +2234,16 @@ class CesarMiniGame:
                     self.phase = "done"
                     self.done = True
         else:
+            # Only number keys 1-9 interact; all other keys are ignored completely
             if ev.unicode in "123456789":
                 self.current_try = int(ev.unicode)
                 self.decrypted_preview = self._try_decrypt(self.current_try)
-            elif ev.key == pygame.K_RETURN:
                 cracked = (self.current_try == self.original_shift)
                 self.result = {
                     "cracked": cracked,
                     "shift": self.current_try,
                     "decrypted": self._try_decrypt(self.current_try),
                 }
-                self.done = True
-            elif ev.key == pygame.K_ESCAPE:
-                self.result = {"cracked": False, "aborted": True}
                 self.done = True
 
     def draw(self, surf):
@@ -2303,7 +2300,7 @@ class CesarMiniGame:
                 surf.blit(rt, (bx + 24, ry + 2))
             dec_t = FONT_SM.render(f"Tentativa [{self.current_try}]: {self.decrypted_preview[:32]}", True, CYAN)
             surf.blit(dec_t, (bx + 20, by + 318))
-            hint3 = FONT_XS.render("ENTER para confirmar tentativa | ESC para fechar", True, GRAY)
+            hint3 = FONT_XS.render("Pressione o número (1-9) para confirmar sua escolha", True, GRAY)
             surf.blit(hint3, (bx + 20, by + 354))
 
 
